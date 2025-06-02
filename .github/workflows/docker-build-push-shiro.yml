@@ -1,0 +1,54 @@
+name: Build and Push Docker Image
+
+on:
+  workflow_dispatch:
+
+env:
+  REGISTRY: docker.io 
+  IMAGE_NAME: fl0w1nd/shiro
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read 
+      packages: write 
+
+    steps:
+      - name: Checkout Shiroi repository
+        uses: actions/checkout@v4
+        with:
+          repository: innei-dev/Shiroi
+          token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
+          path: shiroi-source
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }} 
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./shiroi-source
+          file: ./shiroi-source/dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Send notification
+        run: |
+          curl -X POST https://n8n.zcsouls.com/webhook/docker-restart-shiro \
+            -H "Authorization: Bearer ${{ secrets.WEBHOOK_AUTH_TOKEN }}" \
+            -H "Content-Type: application/json"
